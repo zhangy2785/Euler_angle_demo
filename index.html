@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Euler ZYX Visualizer - Clean Lab Style</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f0f2f5; /* 柔和的浅灰背景 */
+      color: #333; /* 深色文字 */
+    }
+    
+    #controls {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      /* 亮色毛玻璃 */
+      background: rgba(255, 255, 255, 0.85); 
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      padding: 24px;
+      border-radius: 16px;
+      width: 340px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1); /* 柔和的阴影 */
+      z-index: 10;
+    }
+
+    h3 {
+      margin: 0 0 20px 0;
+      font-size: 18px;
+      text-align: center;
+      color: #1a1a1a;
+      font-weight: 700;
+    }
+
+    .control-group {
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start; 
+    }
+
+    /* 标签固定宽度，右对齐文字，显得更专业 */
+    label {
+      width: 80px;      
+      min-width: 80px;  
+      font-weight: 600;
+      font-size: 14px;
+      color: #555;
+    }
+
+    /* 滑块样式：改为现代简约灰 */
+    input[type="range"] {
+      flex-grow: 1;
+      margin: 0 12px;
+      -webkit-appearance: none;
+      height: 6px;
+      background: #e1e4e8;
+      border-radius: 3px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      border: 2px solid #007aff; /* 苹果蓝 */
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      cursor: pointer;
+      margin-top: 0; 
+      transition: transform 0.1s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.1); }
+
+    /* 数字框：白底黑字 */
+    input[type="number"] {
+      width: 50px;
+      background-color: #fff;
+      color: #333;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 6px;
+      text-align: center;
+      font-weight: 500;
+    }
+    input[type="number"]:focus {
+      border-color: #007aff;
+      outline: none;
+    }
+
+    .control-group.disabled {
+      opacity: 0.3;
+      filter: grayscale(100%);
+      pointer-events: none;
+    }
+
+    #resetBtn {
+      padding: 12px;
+      margin-top: 10px;
+      width: 100%;
+      border: none;
+      background-color: #1a1a1a; /* 深黑按钮 */
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    #resetBtn:hover { background-color: #333; }
+
+    #status {
+      margin-top: 15px;
+      font-size: 13px;
+      color: #666;
+      text-align: center;
+      background: #f7f7f7;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #eee;
+    }
+
+    /* 简单的颜色指示圆点 */
+    .color-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <h3>Z-Y-X Rotation</h3>
+    
+    <div id="zControlGroup" class="control-group">
+      <label for="angleZ"><span class="color-dot" style="background:#007aff"></span>Z (Yaw)</label>
+      <input type="range" id="angleZRange" min="-180" max="180" value="0" step="1" />
+      <input type="number" id="angleZNum" min="-180" max="180" value="0" step="1" />
+    </div>
+    
+    <div id="yControlGroup" class="control-group">
+      <label for="angleY"><span class="color-dot" style="background:#34c759"></span>Y (Pitch)</label>
+      <input type="range" id="angleYRange" min="-180" max="180" value="0" step="1" />
+      <input type="number" id="angleYNum" min="-180" max="180" value="0" step="1" />
+    </div>
+    
+    <div id="xControlGroup" class="control-group">
+      <label for="angleX"><span class="color-dot" style="background:#ff3b30"></span>X (Roll)</label>
+      <input type="range" id="angleXRange" min="-180" max="180" value="0" step="1" />
+      <input type="number" id="angleXNum" min="-180" max="180" value="0" step="1" />
+    </div>
+    
+    <button id="resetBtn">Reset</button>
+    <div id="status">Sequence: Z &rarr; Y &rarr; X</div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    let scene, camera, renderer, rootGroup, rotationIndicator;
+    const elements = {};
+    
+    // 颜色定义 (更鲜艳、适合亮色背景)
+    const COLOR_X = 0xff3b30; // Red
+    const COLOR_Y = 0x34c759; // Green
+    const COLOR_Z = 0x007aff; // Blue
+    const COLOR_AXIS_GRAY = 0xd1d5db; 
+
+    init();
+    animate();
+
+    function init() {
+      setupUI();
+      setupScene();
+      setupObjects();
+      setupEvents();
+      reset();
+    }
+
+    function setupUI() {
+      ['Z', 'Y', 'X'].forEach(axis => {
+        const id = axis.toLowerCase();
+        elements[`${id}ControlGroup`] = document.getElementById(`${id}ControlGroup`);
+        elements[`angle${axis}Range`] = document.getElementById(`angle${axis}Range`);
+        elements[`angle${axis}Num`] = document.getElementById(`angle${axis}Num`);
+      });
+      elements.resetBtn = document.getElementById('resetBtn');
+      elements.status = document.getElementById('status');
+    }
+
+    function setupScene() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf0f2f5); // 亮灰背景
+      scene.fog = new THREE.Fog(0xf0f2f5, 10, 30);  // 白色雾气
+
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.set(5, 5, 7);
+      camera.up.set(0, 0, 1);
+      camera.lookAt(0, 0, 0);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true; // 开启阴影
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      document.body.appendChild(renderer.domElement);
+
+      // 灯光设置 - 类似摄影棚的高亮光
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambientLight);
+
+      const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
+      mainLight.position.set(5, 10, 8);
+      mainLight.castShadow = true;
+      mainLight.shadow.mapSize.width = 2048;
+      mainLight.shadow.mapSize.height = 2048;
+      mainLight.shadow.bias = -0.0001;
+      scene.add(mainLight);
+
+      const fillLight = new THREE.DirectionalLight(0xeef2ff, 0.5); // 冷色补光
+      fillLight.position.set(-5, 0, 2);
+      scene.add(fillLight);
+
+      // 地板网格 - 浅色背景配深色线
+      const gridHelper = new THREE.GridHelper(20, 20, 0xbdc3c7, 0xe1e4e8);
+      gridHelper.rotation.x = Math.PI / 2;
+      scene.add(gridHelper);
+
+      // 隐形地板 (用来接收阴影)
+      const planeGeo = new THREE.PlaneGeometry(20, 20);
+      const planeMat = new THREE.ShadowMaterial({ opacity: 0.1 });
+      const plane = new THREE.Mesh(planeGeo, planeMat);
+      plane.receiveShadow = true;
+      scene.add(plane);
+    }
+
+    // --- 核心修改：手动创建“加粗”坐标轴 ---
+    function createThickAxis(axis, length, radius, color) {
+      const group = new THREE.Group();
+      
+      // 材质
+      const mat = new THREE.MeshStandardMaterial({ 
+        color: color, 
+        roughness: 0.5, 
+        metalness: 0.1 
+      });
+
+      // 轴身 (Cylinder)
+      const shaftLen = length * 0.85;
+      const shaftGeo = new THREE.CylinderGeometry(radius, radius, shaftLen, 32);
+      const shaft = new THREE.Mesh(shaftGeo, mat);
+      shaft.position.y = shaftLen / 2; // 原点在底部
+      shaft.castShadow = true;
+      shaft.receiveShadow = true;
+
+      // 箭头 (Cone)
+      const headLen = length * 0.15;
+      const headRadius = radius * 2.5;
+      const headGeo = new THREE.ConeGeometry(headRadius, headLen, 32);
+      const head = new THREE.Mesh(headGeo, mat);
+      head.position.y = shaftLen + headLen / 2;
+      head.castShadow = true;
+
+      group.add(shaft);
+      group.add(head);
+
+      // 旋转到正确方向 (默认是Y轴向上)
+      if (axis === 'X') group.rotation.z = -Math.PI / 2;
+      if (axis === 'Z') group.rotation.x = Math.PI / 2;
+
+      return group;
+    }
+
+    function createCoordinateSystem(size, thickness) {
+      const group = new THREE.Group();
+      group.add(createThickAxis('X', size, thickness, COLOR_X));
+      group.add(createThickAxis('Y', size, thickness, COLOR_Y));
+      group.add(createThickAxis('Z', size, thickness, COLOR_Z));
+      
+      // 加个原点球
+      const origin = new THREE.Mesh(
+        new THREE.SphereGeometry(thickness * 2.5, 32, 32),
+        new THREE.MeshStandardMaterial({ color: 0x333333 })
+      );
+      group.add(origin);
+      
+      return group;
+    }
+
+    function createRing(radius, color) {
+      // 扁平的带状环，看起来更精密
+      const geometry = new THREE.TorusGeometry(radius, 0.03, 16, 100); 
+      const material = new THREE.MeshStandardMaterial({
+        color: color,
+        metalness: 0.3,
+        roughness: 0.4,
+        side: THREE.DoubleSide
+      });
+      const ring = new THREE.Mesh(geometry, material);
+      ring.castShadow = true;
+      ring.receiveShadow = true;
+      return ring;
+    }
+
+    function setupObjects() {
+      // 1. 世界坐标系 (放在背景里，浅灰色，粗一点)
+      const worldAxes = createCoordinateSystem(4, 0.02);
+      // 覆盖颜色为灰色
+      worldAxes.children.forEach(c => {
+        if(c.children.length > 0) c.children.forEach(m => m.material.color.setHex(COLOR_AXIS_GRAY)); // Axis
+        else c.material.color.setHex(COLOR_AXIS_GRAY); // Origin
+      });
+      scene.add(worldAxes);
+
+      // 2. 旋转层级
+      rootGroup = new THREE.Group();
+      scene.add(rootGroup);
+
+      const zGroup = new THREE.Group();
+      const yGroup = new THREE.Group();
+      const xGroup = new THREE.Group();
+      
+      rootGroup.add(zGroup);
+      zGroup.add(yGroup);
+      yGroup.add(xGroup);
+      rootGroup.userData = { zGroup, yGroup, xGroup };
+
+      // 3. 添加圆环
+      // Z Ring
+      const zRing = createRing(2.2, COLOR_Z);
+      zGroup.add(zRing);
+      // Y Ring
+      const yRing = createRing(1.8, COLOR_Y);
+      yRing.rotation.x = Math.PI / 2;
+      yGroup.add(yRing);
+      // X Ring
+      const xRing = createRing(1.4, COLOR_X);
+      xRing.rotation.y = Math.PI / 2;
+      xGroup.add(xRing);
+
+      // 4. 本地坐标系 (核心物体，跟随旋转)
+      // 使用我们自定义的“加粗”坐标轴
+      const localAxes = createCoordinateSystem(1.2, 0.04); // 长度1.2，粗细0.04
+      xGroup.add(localAxes);
+
+      // 5. 交互用的黄色指示箭头
+      rotationIndicator = new THREE.ArrowHelper(
+        new THREE.Vector3(0,0,1), 
+        new THREE.Vector3(0,0,0), 
+        2.5, 
+        0xf1c40f, // 橙黄色
+        0.5, // 箭头头长
+        0.3  // 箭头头宽
+      );
+      rotationIndicator.visible = false;
+      // ArrowHelper 也可以加粗吗？Three.js原生不支持加粗线，
+      // 但我们可以用 Cone 代替头，Cylinder 代替身，为了逻辑简单这里先用原生的，
+      // 因为黄色在亮色背景下对比度还可以，如果需要也可以换成 mesh。
+      scene.add(rotationIndicator);
+    }
+
+    function setupEvents() {
+      setupSequentialBinding('Z');
+      setupSequentialBinding('Y');
+      setupSequentialBinding('X');
+      elements.resetBtn.addEventListener('click', reset);
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function setupSequentialBinding(axis) {
+      const range = elements[`angle${axis}Range`];
+      const num = elements[`angle${axis}Num`];
+      
+      const update = () => {
+        if (document.activeElement === range) num.value = range.value;
+        else range.value = num.value;
+
+        if (axis === 'Z') {
+          setDisabled('Y', false);
+          setDisabled('X', true);
+          resetAxis('Y'); resetAxis('X');
+        } else if (axis === 'Y') {
+          setDisabled('X', false);
+          resetAxis('X');
+        }
+        updateScene(axis);
+      };
+
+      range.addEventListener('input', update);
+      num.addEventListener('input', update);
+    }
+
+    function setDisabled(axis, isDisabled) {
+      const el = elements[`${axis.toLowerCase()}ControlGroup`];
+      if (isDisabled) el.classList.add('disabled');
+      else el.classList.remove('disabled');
+    }
+
+    function resetAxis(axis) {
+      elements[`angle${axis}Range`].value = 0;
+      elements[`angle${axis}Num`].value = 0;
+    }
+
+    function reset() {
+      ['Z', 'Y', 'X'].forEach(resetAxis);
+      setDisabled('Y', true);
+      setDisabled('X', true);
+      updateScene(null);
+    }
+
+    function updateScene(activeAxis) {
+      const z = THREE.MathUtils.degToRad(elements.angleZNum.value);
+      const y = THREE.MathUtils.degToRad(elements.angleYNum.value);
+      const x = THREE.MathUtils.degToRad(elements.angleXNum.value);
+
+      rootGroup.userData.zGroup.rotation.z = z;
+      rootGroup.userData.yGroup.rotation.y = y;
+      rootGroup.userData.xGroup.rotation.x = x;
+
+      if (!activeAxis) {
+        rotationIndicator.visible = false;
+        elements.status.innerHTML = "Wait for input...";
+        return;
+      }
+
+      rotationIndicator.visible = true;
+      let parent = scene;
+      let dir = new THREE.Vector3();
+      let text = "";
+
+      // 脱离当前父级
+      if (rotationIndicator.parent) rotationIndicator.parent.remove(rotationIndicator);
+
+      switch(activeAxis.toLowerCase()) {
+        case 'z':
+          parent = rootGroup; 
+          dir.set(0, 0, 1);
+          text = "Rotating Z (Yaw) - Blue Axis";
+          break;
+        case 'y':
+          parent = rootGroup.userData.zGroup;
+          dir.set(0, 1, 0);
+          text = "Rotating Y (Pitch) - Green Axis";
+          break;
+        case 'x':
+          parent = rootGroup.userData.yGroup;
+          dir.set(1, 0, 0);
+          text = "Rotating X (Roll) - Red Axis";
+          break;
+      }
+      
+      parent.add(rotationIndicator);
+      rotationIndicator.setDirection(dir);
+      elements.status.innerText = text;
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+  </script>
+</body>
+</html>
